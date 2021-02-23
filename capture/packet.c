@@ -196,7 +196,7 @@ LOCAL void moloch_packet_process(MolochPacket_t *packet, int thread)
     struct ip6_hdr      *ip6 = (struct ip6_hdr*)(packet->pkt + packet->ipOffset);
     uint8_t              sessionId[MOLOCH_SESSIONID_LEN];
 
-    moloch_print_hex_string(packet->pkt, packet->pktlen);
+//    moloch_print_hex_string(packet->pkt, packet->pktlen);
     int pkt_len = packet->pktlen;
     int ip_len = ntohs(ip4->ip_len);
     int ip6_len = ntohs(ip6->ip6_plen);
