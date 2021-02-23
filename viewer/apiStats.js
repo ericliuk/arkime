@@ -10,6 +10,48 @@ module.exports = (Config, Db, internals, ViewerUtils) => {
   // --------------------------------------------------------------------------
   // APIs
   // --------------------------------------------------------------------------
+  // ES HEALTH APIS -----------------------------------------------------------
+  /**
+   * The Elasticsearch cluster health status and information.
+   * @typedef ESHealth
+   * @type {object}
+   * @property {number} active_primary_shards - The number of active primary shards.
+   * @property {number} active_shards - The total number of active primary and replica shards.
+   * @property {number} active_shards_percent_as_number - The ratio of active shards in the cluster expressed as a percentage.
+   * @property {string} cluster_name - The name of the arkime cluster
+   * @property {number} delayed_unassigned_shards - The number of shards whose allocation has been delayed by the timeout settings.
+   * @property {number} initializing_shards - The number of shards that are under initialization.
+   * @property {number} molochDbVersion - The arkime database version
+   * @property {number} number_of_data_nodes - The number of nodes that are dedicated data nodes.
+   * @property {number} number_of_in_flight_fetch - The number of unfinished fetches.
+   * @property {number} number_of_nodes - The number of nodes within the cluster.
+   * @property {number} number_of_pending_tasks - The number of cluster-level changes that have not yet been executed.
+   * @property {number} relocating_shards - The number of shards that are under relocation.
+   * @property {string} status - Health status of the cluster, based on the state of its primary and replica shards. Statuses are:
+      "green" - All shards are assigned.
+      "yellow" - All primary shards are assigned, but one or more replica shards are unassigned. If a node in the cluster fails, some data could be unavailable until that node is repaired.
+      "red" - One or more primary shards are unassigned, so some data is unavailable. This can occur briefly during cluster startup as primary shards are assigned.
+   * @property {number} task_max_waiting_in_queue_millis - The time expressed in milliseconds since the earliest initiated task is waiting for being performed.
+   * @property {boolean} timed_out - If false the response returned within the period of time that is specified by the timeout parameter (30s by default).
+   * @property {number} unassigned_shards - The number of shards that are not allocated.
+   * @property {string} version - the elasticsearch version number
+   * @property {number} _timeStamp - timestamps in ms from unix epoc
+   */
+
+  /**
+   * GET - /api/eshealth
+   *
+   * Retrive Elasticsearch health and stats
+   * There is no auth necessary to retrieve eshealth
+   * @name /eshealth
+   * @returns {ESHealth} health - The elasticsearch cluster health status and info
+   */
+  module.getESHealth = (req, res) => {
+    Db.healthCache((err, health) => {
+      res.send(health);
+    });
+  };
+
   // STATS APIS ---------------------------------------------------------------
   /**
    * GET - /api/stats
@@ -862,10 +904,12 @@ module.exports = (Config, Db, internals, ViewerUtils) => {
     ]).then(([settings, ilm, template]) => {
       let rsettings = [];
 
+      function getValue (key) {
+        return settings.transient[key] || settings.persistent[key] || settings.defaults[key];
+      }
+
       function addSetting (key, type, name, url, regex, current) {
-        if (current === undefined) { current = settings.transient[key]; }
-        if (current === undefined) { current = settings.persistent[key]; }
-        if (current === undefined) { current = settings.defaults[key]; }
+        if (current === undefined) { current = getValue(key); }
         if (current === undefined) { return; }
         rsettings.push({ key: key, current: current, name: name, type: type, url: url, regex: regex });
       }
@@ -875,20 +919,14 @@ module.exports = (Config, Db, internals, ViewerUtils) => {
         'https://www.elastic.co/guide/en/elasticsearch/reference/current/search-aggregations-bucket.html',
         '^(|null|\\d+)$');
 
-      addSetting('cluster.routing.allocation.disk.watermark.flood_stage', 'Percent or Byte Value',
-        'Disk Watermark Flood',
+      addSetting('arkime.disk.watermarks', '3 Percent or Byte Values',
+        'Disk Watermark Low,High,Flood',
         'https://www.elastic.co/guide/en/elasticsearch/reference/current/disk-allocator.html',
-        '^(|null|\\d+(%|b|kb|mb|gb|tb|pb))$');
-
-      addSetting('cluster.routing.allocation.disk.watermark.high', 'Percent or Byte Value',
-        'Disk Watermark High',
-        'https://www.elastic.co/guide/en/elasticsearch/reference/current/disk-allocator.html',
-        '^(|null|\\d+(%|b|kb|mb|gb|tb|pb))$');
-
-      addSetting('cluster.routing.allocation.disk.watermark.low', 'Percent or Byte Value',
-        'Disk Watermark Low',
-        'https://www.elastic.co/guide/en/elasticsearch/reference/current/disk-allocator.html',
-        '^(|null|\\d+(%|b|kb|mb|gb|tb|pb))$');
+        '^(|null|\\d+(%|b|kb|mb|gb|tb|pb),\\d+(%|b|kb|mb|gb|tb|pb),\\d+(%|b|kb|mb|gb|tb|pb))$',
+        getValue('cluster.routing.allocation.disk.watermark.low') + ',' +
+        getValue('cluster.routing.allocation.disk.watermark.high') + ',' +
+        getValue('cluster.routing.allocation.disk.watermark.flood_stage')
+      );
 
       addSetting('cluster.routing.allocation.enable', 'Mode',
         'Allocation Mode',
@@ -994,6 +1032,34 @@ module.exports = (Config, Db, internals, ViewerUtils) => {
     // Convert null string to null
     if (req.body.value === 'null') { req.body.value = null; }
 
+    // Must set all 3 at once because of ES bug/feature
+    if (req.body.key === 'arkime.disk.watermarks') {
+      let query = { body: { persistent: {} } };
+      if (req.body.value === '' || req.body.value === null) {
+        query.body.persistent['cluster.routing.allocation.disk.watermark.low'] = null;
+        query.body.persistent['cluster.routing.allocation.disk.watermark.high'] = null;
+        query.body.persistent['cluster.routing.allocation.disk.watermark.flood_stage'] = null;
+      } else {
+        const parts = req.body.value.split(',');
+        if (parts.length !== 3) {
+          return res.molochError(500, 'Must be 3 piece of info');
+        }
+
+        query.body.persistent['cluster.routing.allocation.disk.watermark.low'] = parts[0];
+        query.body.persistent['cluster.routing.allocation.disk.watermark.high'] = parts[1];
+        query.body.persistent['cluster.routing.allocation.disk.watermark.flood_stage'] = parts[2];
+      }
+
+      Db.putClusterSettings(query, (err, result) => {
+        if (err) {
+          console.log('putSettings failed', JSON.stringify(result, false, 2), 'query', JSON.stringify(query, false, 2));
+          return res.molochError(500, 'Set failed');
+        }
+        return res.send(JSON.stringify({ success: true, text: 'Set' }));
+      });
+      return;
+    }
+
     if (req.body.key.startsWith('arkime.ilm')) {
       Promise.all([Db.getILMPolicy()]).then(([ilm]) => {
         const silm = ilm[`${internals.prefix}molochsessions`];
@@ -1062,7 +1128,7 @@ module.exports = (Config, Db, internals, ViewerUtils) => {
 
     Db.putClusterSettings(query, (err, result) => {
       if (err) {
-        console.log('putSettings failed', result);
+        console.log('putSettings failed', JSON.stringify(result, false, 2), 'query', JSON.stringify(query, false, 2));
         return res.molochError(500, 'Set failed');
       }
       return res.send(JSON.stringify({ success: true, text: 'Set' }));
@@ -1266,7 +1332,7 @@ module.exports = (Config, Db, internals, ViewerUtils) => {
       query.body.persistent[settingName] = exclude.join(',');
 
       Db.putClusterSettings(query, (err, settings) => {
-        if (err) { console.log('putSettings', err); }
+        if (err) { console.log('putSettings', JSON.stringify(err, false, 2), 'query', query); }
         return res.send(JSON.stringify({ success: true, text: 'Excluded' }));
       });
     });
@@ -1380,6 +1446,75 @@ module.exports = (Config, Db, internals, ViewerUtils) => {
         recordsFiltered: 0,
         data: []
       });
+    });
+  };
+
+  // PARLIAMENT APIs ----------------------------------------------------------
+  /**
+   * GET - /api/parliament
+   *
+   * Returns information all the Arkime clusters configured in your Parliament.
+   * See the parliament definition <a href="https://github.com/arkime/arkime/tree/master/parliament#parliament-definition">here</a> (subject to change).
+   * @name /parliament
+   * @returns {array} data - List of fields that describe the cluster stats.
+   * @returns {number} recordsTotal - The total number of stats.
+   * @returns {number} recordsFiltered - The number of stats returned in this result.
+   */
+  module.getParliament = (req, res) => {
+    const query = {
+      size: 1000,
+      query: {
+        bool: {
+          must_not: [
+            { term: { hide: true } }
+          ]
+        }
+      },
+      _source: [
+        'ver', 'nodeName', 'currentTime', 'monitoring', 'deltaBytes',
+        'deltaPackets', 'deltaMS', 'deltaESDropped', 'deltaDropped',
+        'deltaOverloadDropped'
+      ]
+    };
+
+    Promise.all([
+      Db.search('stats', 'stat', query),
+      Db.numberOfDocuments('stats')
+    ]).then(([stats, total]) => {
+      if (stats.error) { throw stats.error; }
+
+      const results = { total: stats.hits.total, results: [] };
+
+      for (const stat of stats.hits.hits) {
+        const fields = stat._source || stat.fields;
+
+        if (stat._source) {
+          ViewerUtils.mergeUnarray(fields, stat.fields);
+        }
+        fields.id = stat._id;
+
+        // make sure necessary fields are not undefined
+        const keys = [ 'deltaOverloadDropped', 'monitoring', 'deltaESDropped' ];
+        for (const key of keys) {
+          fields[key] = fields[key] || 0;
+        }
+
+        fields.deltaBytesPerSec = Math.floor(fields.deltaBytes * 1000.0 / fields.deltaMS);
+        fields.deltaPacketsPerSec = Math.floor(fields.deltaPackets * 1000.0 / fields.deltaMS);
+        fields.deltaESDroppedPerSec = Math.floor(fields.deltaESDropped * 1000.0 / fields.deltaMS);
+        fields.deltaTotalDroppedPerSec = Math.floor((fields.deltaDropped + fields.deltaOverloadDropped) * 1000.0 / fields.deltaMS);
+
+        results.results.push(fields);
+      }
+
+      res.send({
+        data: results.results,
+        recordsTotal: total.count,
+        recordsFiltered: results.total
+      });
+    }).catch((err) => {
+      console.log('ERROR - /api/parliament', err);
+      res.send({ recordsTotal: 0, recordsFiltered: 0, data: [] });
     });
   };
 

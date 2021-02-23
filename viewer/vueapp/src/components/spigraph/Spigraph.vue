@@ -40,7 +40,7 @@
               <div class="input-group input-group-sm">
                 <span class="input-group-prepend cursor-help"
                   v-b-tooltip.hover
-                  title="Max Elements Shown">
+                  title="Maximum number of elements returned (for the first field selected)">
                   <span class="input-group-text">
                     Max Elements:
                   </span>
@@ -75,7 +75,7 @@
                   v-model="spiGraphType"
                   @change="changeSpiGraphType">
                   <option value="default">timeline/map</option>
-                  <option value="pie">pie</option>
+                  <option value="pie">donut</option>
                   <option value="table">table</option>
                   <option value="treemap">treemap</option>
                 </select>
@@ -486,7 +486,7 @@ export default {
     /* event functions ----------------------------------------------------- */
     changeField: function (field) {
       this.fieldTypeahead = field.friendlyName;
-      this.query.exp = field.dbField;
+      this.query.exp = field.exp;
       this.baseField = field.exp;
       this.$router.push({
         query: {

@@ -28,7 +28,8 @@ NOTICE: Restart wiseService before capture when upgrading
   - BREAKING - wise - redis urls have a new standard format
   - BREAKING - wise - for json data keyColumn has been renamed keyPath
   - BREAKING - wise - now lower case lotermfield and upper case uptermfield fields
-  - release - curl 7.74.0, node 12.20.1, glib 2.66.4, yara 4.0.2, lua 5.3.6, maxmind 1.4.3
+  - BREAKING - capture - override-ips will no longer have leading 0s for ASN
+  - release - curl 7.74.0, node 12.20.2, glib 2.66.4, yara 4.0.2, lua 5.3.6, maxmind 1.4.3
   - capture - search for GeoIP files first in /var/lib/GeoIP
   - capture - fixed possible ABR with time parsing
   - capture - fixed memory leak with dns bad hostname parsing
@@ -36,9 +37,11 @@ NOTICE: Restart wiseService before capture when upgrading
   - capture - handle larger oracle connect msgs better
   - capture - parse small http basic auth headers correctly
   - capture - rule matches can now be logged
+  - capture - new localPcapIndex setting to enable pcap index on capture node instead of ES
+  - capture - write long open tcp sessions every tcpSaveTimeout even if no syn
   - viewer - add POST version session query APIs to support long expressions
              old GET versions still work
-  - viewer - reorganize and standardize some APIs
+  - viewer - reorganize and standardize APIs
   - viewer - put npm scripts and common npm packages at top level
   - viewer - allow viewing of large encrypted pcap files (issue #1555)
   - viewer - can find nodes for pcap based on --host
@@ -46,11 +49,14 @@ NOTICE: Restart wiseService before capture when upgrading
   - viewer - fix addTag/removeTag with multiviewer (PR #1556)
   - viewer - can modify some sessions2 template from esadmin tab
   - viewer - can modify entire shortcuts now
+  - viewer - spigraph visualization improvements
+  - viewer - Can set watermark settings again
   - wise - new config UI, enable with --webconfig
   - wise - more moloch->arkime changes
   - wise - for json data can now set arrayPath for start of where to parse
   - wise - new elasticsearchfile type
   - wise - threatstream results now cached
+  - wise - support memcached for cache
   - all - renamed rightclicks to valueactions
   - esproxy - first version, see https://arkime.com/esproxy
 

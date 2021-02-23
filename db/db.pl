@@ -3081,7 +3081,7 @@ while (@ARGV > 0 && substr($ARGV[0], 0, 1) eq "-") {
 
 showHelp("Help:") if ($ARGV[1] =~ /^help$/);
 showHelp("Missing arguments") if (@ARGV < 2);
-showHelp("Unknown command '$ARGV[1]'") if ($ARGV[1] !~ /^(init|initnoprompt|clean|info|wipe|upgrade|upgradenoprompt|disable-?users|set-?shortcut|users-?import|import|restore|users-?export|export|backup|expire|rotate|optimize|optimize-admin|mv|rm|rm-?missing|rm-?node|add-?missing|field|force-?put-?version|sync-?files|hide-?node|unhide-?node|add-?alias|set-?replicas|set-?shards-?per-?node|set-?allocation-?enable|allocate-?empty|unflood-?stage|shrink|ilm|recreate-users|recreate-stats|recreate-dstats|reindex)$/);
+showHelp("Unknown command '$ARGV[1]'") if ($ARGV[1] !~ /^(init|initnoprompt|clean|info|wipe|upgrade|upgradenoprompt|disable-?users|set-?shortcut|users-?import|import|restore|users-?export|export|backup|expire|rotate|optimize|optimize-admin|mv|rm|rm-?missing|rm-?node|add-?missing|field|force-?put-?version|sync-?files|hide-?node|unhide-?node|add-?alias|set-?replicas|set-?shards-?per-?node|set-?allocation-?enable|allocate-?empty|unflood-?stage|shrink|ilm|recreate-users|recreate-stats|recreate-dstats|recreate-fields|reindex)$/);
 showHelp("Missing arguments") if (@ARGV < 3 && $ARGV[1] =~ /^(users-?import|import|users-?export|backup|restore|rm|rm-?missing|rm-?node|hide-?node|unhide-?node|set-?allocation-?enable|unflood-?stage|reindex)$/);
 showHelp("Missing arguments") if (@ARGV < 4 && $ARGV[1] =~ /^(field|export|add-?missing|sync-?files|add-?alias|set-?replicas|set-?shards-?per-?node|set-?shortcut|ilm)$/);
 showHelp("Missing arguments") if (@ARGV < 5 && $ARGV[1] =~ /^(allocate-?empty|set-?shortcut|shrink)$/);
@@ -3518,6 +3518,12 @@ if ($ARGV[1] =~ /^(users-?import|import)$/) {
     esDelete("/${PREFIX}dstats", 1);
     dstatsCreate();
     exit 0;
+} elsif ($ARGV[1] eq "recreate-fields") {
+    waitFor("FIELDS", "This will delete and recreate the fields index, make sure no captures are running");
+    esDelete("/${PREFIX}fields_*", 1);
+    esDelete("/${PREFIX}fields", 1);
+    fieldsCreate();
+    exit 0;
 } elsif ($ARGV[1] eq "info") {
     dbVersion(0);
     my $esversion = dbESVersion();
@@ -3570,14 +3576,14 @@ if ($ARGV[1] =~ /^(users-?import|import)$/) {
     printf "ES Data Nodes:       %17s/%s\n", commify($dataNodes), commify($totalNodes);
     printf "Sessions2 Indices:   %17s\n", commify(scalar(@sessions));
     printf "Sessions:            %17s (%s bytes)\n", commify($sessions), commify($sessionsBytes);
-    if (scalar(@sessions) > 0) {
+    if (scalar(@sessions) > 0 && $dataNodes > 0) {
         printf "Sessions Density:    %17s (%s bytes)\n", commify(int($sessions/($dataNodes*scalar(@sessions)))),
                                                        commify(int($sessionsBytes/($dataNodes*scalar(@sessions))));
         my $days =  (int($minMax->{aggregations}->{max}->{value}) - int($minMax->{aggregations}->{min}->{value}))/(24*60*60*1000);
 
-        printf "MB per Day:          %17s\n", commify(int($sessionsTotalBytes/($days*1000*1000)));
+        printf "MB per Day:          %17s\n", commify(int($sessionsTotalBytes/($days*1000*1000))) if ($days > 0);
         printf "Sessions Days:       %17.2f (%s - %s)\n", $days, $minMax->{aggregations}->{min}->{value_as_string}, $minMax->{aggregations}->{max}->{value_as_string};
-        printf "Possible Sessions Days:  %13.2f\n", (0.95*$diskTotal)/($sessionsTotalBytes/$days);
+        printf "Possible Sessions Days:  %13.2f\n", (0.95*$diskTotal)/($sessionsTotalBytes/$days) if ($days > 0);
 
         if (exists $ilm->{molochsessions} && exists $ilm->{molochsessions}->{policy}->{phases}->{delete}) {
             printf "ILM Delete Age:      %17s\n", $ilm->{molochsessions}->{policy}->{phases}->{delete}->{min_age};
@@ -3585,7 +3591,7 @@ if ($ARGV[1] =~ /^(users-?import|import)$/) {
     }
     printf "History Indices:     %17s\n", commify(scalar(@historys));
     printf "Histories:           %17s (%s bytes)\n", commify($historys), commify($historysBytes);
-    if (scalar(@historys) > 0) {
+    if (scalar(@historys) > 0 && $dataNodes > 0) {
         printf "History Density:     %17s (%s bytes)\n", commify(int($historys/($dataNodes*scalar(@historys)))),
                                                        commify(int($historysBytes/($dataNodes*scalar(@historys))));
     }

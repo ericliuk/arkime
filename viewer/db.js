@@ -18,9 +18,10 @@
 
 'use strict';
 
-var ESC = require('elasticsearch');
-var os = require('os');
-var fs = require('fs');
+const ESC = require('elasticsearch');
+const os = require('os');
+const fs = require('fs');
+const async = require('async');
 const { Client } = require('@elastic/elasticsearch');
 
 var internals = { fileId2File: {},
@@ -190,24 +191,78 @@ exports.getSession = function (id, options, cb) {
     }
     exports.fileIdToFile(fields.node, -1 * fields.packetPos[0], (fileInfo) => {
       // Neg numbers aren't encoded, if pos is 0 same gap as last gap, otherwise last + pos
-      if (fileInfo && fileInfo.packetPosEncoding === 'gap0') {
-        let last = 0;
-        let lastgap = 0;
-        for (let i = 0, ilen = fields.packetPos.length; i < ilen; i++) {
-          if (fields.packetPos[i] < 0) {
-            last = 0;
-          } else {
-            if (fields.packetPos[i] === 0) {
-              fields.packetPos[i] = last + lastgap;
+      if (fileInfo) {
+        if (fileInfo.packetPosEncoding === 'gap0') {
+          let last = 0;
+          let lastgap = 0;
+          for (let i = 0, ilen = fields.packetPos.length; i < ilen; i++) {
+            if (fields.packetPos[i] < 0) {
+              last = 0;
             } else {
-              lastgap = fields.packetPos[i];
-              fields.packetPos[i] += last;
+              if (fields.packetPos[i] === 0) {
+                fields.packetPos[i] = last + lastgap;
+              } else {
+                lastgap = fields.packetPos[i];
+                fields.packetPos[i] += last;
+              }
+              last = fields.packetPos[i];
             }
-            last = fields.packetPos[i];
           }
+          return cb(null, session);
+        } else if (fileInfo.packetPosEncoding === 'localIndex') {
+          exports.isLocalView(fields.node, () => {
+            let newPacketPos = [];
+            async.forEachOfSeries(fields.packetPos, (item, key, nextCb) => {
+              if (key % 3 !== 0) { return nextCb(); } // Only look at every 3rd item
+
+              exports.fileIdToFile(fields.node, -1 * item, (fileInfo) => {
+                try {
+                  const fd = fs.openSync(fileInfo.indexFilename, 'r');
+                  if (!fd) { return nextCb(); }
+                  const buffer = Buffer.alloc(fields.packetPos[key + 2]);
+                  fs.readSync(fd, buffer, 0, buffer.length, fields.packetPos[key + 1]);
+                  let last = 0;
+                  let lastgap = 0;
+                  let num = 0;
+                  let mult = 1;
+                  newPacketPos.push(item);
+                  for (let i = 0; i < buffer.length; i++) {
+                    let x = buffer.readUInt8(i);
+                    // high bit set when last
+                    if (x & 0x80) {
+                      num = num + (x & 0x7f) * mult;
+                      if (num !== 0) {
+                        lastgap = num;
+                      }
+                      last += lastgap;
+                      newPacketPos.push(last);
+                      num = 0;
+                      mult = 1;
+                    } else {
+                      num = num + x * mult;
+                      mult *= 128; // Javscript can't shift large numbers, so mult
+                    }
+                  }
+                  fs.closeSync(fd);
+                } catch (e) {
+                  console.log(e);
+                }
+                return nextCb();
+              });
+            }, () => {
+              fields.packetPos = newPacketPos;
+              return cb(null, session);
+            });
+          }, () => {
+            return cb(null, session);
+          });
+        } else {
+          console.log('Unsupported packetPosEncoding', fileInfo);
+          return cb(null, session);
         }
+      } else {
+        return cb(null, session);
       }
-      return cb(null, session);
     });
   }
 
@@ -787,7 +842,16 @@ exports.deleteUser = function (name, cb) {
 // Set user, callback only
 exports.setUser = function (name, doc, cb) {
   delete internals.usersCache[name];
-  internals.usersClient7.index({ index: internals.usersPrefix + 'users', body: doc, id: name, refresh: true, timeout: '10m' }, (err) => {
+  const createOnly = !!doc._createOnly;
+  delete doc._createOnly;
+  internals.usersClient7.index({
+    index: internals.usersPrefix + 'users',
+    body: doc,
+    id: name,
+    refresh: true,
+    timeout: '10m',
+    op_type: createOnly ? 'create' : 'index'
+  }, (err) => {
     delete internals.usersCache[name]; // Delete again after db says its done refreshing
     cb(err);
   });

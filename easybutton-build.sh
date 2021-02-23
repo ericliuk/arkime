@@ -18,7 +18,7 @@ PCAP=1.9.1
 CURL=7.74.0
 LUA=5.3.6
 DAQ=2.0.7
-NODE=12.20.1
+NODE=12.20.2
 NGHTTP2=1.42.0
 
 TDIR="/opt/arkime"
@@ -123,7 +123,7 @@ fi
 
 if [ "$UNAME" = "Darwin" ]; then
   if [ -x "/opt/local/bin/port" ]; then
-    sudo port install libpcap yara glib2 jansson ossp-uuid libmaxminddb libmagic pcre lua libyaml wget libnghttp2
+    sudo port install libpcap yara glib2 jansson ossp-uuid libmaxminddb libmagic pcre lua libyaml wget nghttp2
 
     echo "ARKIME: Building capture"
     echo './configure --with-libpcap=/opt/local --with-yara=/opt/local LDFLAGS="-L/opt/local/lib" --with-glib2=no GLIB2_CFLAGS="-I/opt/local/include/glib-2.0 -I/opt/local/lib/glib-2.0/include" GLIB2_LIBS="-L/opt/local/lib -lglib-2.0 -lgmodule-2.0 -lgobject-2.0 -lgio-2.0" --with-pfring=no --with-curl=yes --with-nghttp2=yes --with-lua=no LUA_CFLAGS="-I/opt/local/include" LUA_LIBS="-L/opt/local/lib -llua"'
@@ -165,7 +165,7 @@ else
 
     if [ ! -f "glib-$GLIB/_build/gio/libgio-2.0.a" ] || [ ! -f "glib-$GLIB/_build/glib/libglib-2.0.a" ]; then
       pip3 install meson
-      git clone git://github.com/ninja-build/ninja.git
+      git clone https://github.com/ninja-build/ninja.git
       (echo $PATH; cd ninja; git checkout release; python3 configure.py --bootstrap)
       xzcat glib-$GLIB.tar.xz | tar xf -
       (export PATH=$TPWD/ninja:$PATH; cd glib-$GLIB ; meson _build -Ddefault_library=static -Dselinux=disabled -Dxattr=false -Dlibmount=disabled -Dinternal_pcre=true; ninja -C _build)
