@@ -441,7 +441,6 @@ if (HEAD.s_count > 0) { \
 
 void moloch_db_save_session(MolochSession_t *session, int final)
 {
-    LOG("====== moloch db save session, thread:%d.", session->thread);
     uint32_t               i;
     char                   id[100];
     uint32_t               id_len;
@@ -871,20 +870,14 @@ void moloch_db_save_session(MolochSession_t *session, int final)
             break;
         case MOLOCH_FIELD_TYPE_STR:
             BSB_EXPORT_sprintf(jbsb, "\"%s\":", config.fields[pos]->dbField);
-                moloch_db_js0n_str(&jbsb,
+            moloch_db_js0n_str(&jbsb,
                                (unsigned char *)session->fields[pos]->str,
                                flags & MOLOCH_FIELD_FLAG_FORCE_UTF8);
+            BSB_EXPORT_u08(jbsb, ',');
 
-                BSB_EXPORT_u08(jbsb, ',');
-
-                if (freeField) {
-//                LOG("======Deal fields:============str5:%s", session->fields[pos]->str);
-                //会段错误
+            if (freeField) {
                 g_free(session->fields[pos]->str);
-//                LOG("======Deal fields:============str6");
-
             }
-//            LOG("======Deal fields:============str comp");
             break;
         case MOLOCH_FIELD_TYPE_INT_ARRAY:
             if (flags & MOLOCH_FIELD_FLAG_CNT) {
@@ -1184,8 +1177,7 @@ void moloch_db_save_session(MolochSession_t *session, int final)
 
     MOLOCH_THREAD_INCR_NUM(totalSessionBytes, (int)(BSB_WORK_PTR(jbsb)-dataPtr));
 
-    if (config.dryRun)
-    {
+    if (config.dryRun) {
         if (config.tests) {
             static int outputed;
 
@@ -1602,8 +1594,6 @@ LOCAL gboolean moloch_db_flush_gfunc (gpointer user_data )
 
     for (thread = 0; thread < config.packetThreads; thread++) {
         MOLOCH_LOCK(dbInfo[thread].lock);
-        printf("moloch db flush thread------%s\n", dbInfo[thread].json);
-        printf("condition:%d---%d\n", dbInfo[thread].json && BSB_LENGTH(dbInfo[thread].bsb) > 0, (currentTime.tv_sec - dbInfo[thread].lastSave) >= config.dbFlushTimeout);
         if (dbInfo[thread].json && BSB_LENGTH(dbInfo[thread].bsb) > 0 &&
             ((currentTime.tv_sec - dbInfo[thread].lastSave) >= config.dbFlushTimeout || user_data == (gpointer)1)) {
 
