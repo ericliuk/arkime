@@ -825,7 +825,7 @@ LOCAL MolochPacketRC moloch_packet_ip4(MolochPacketBatch_t *batch, MolochPacket_
 #endif
         return MOLOCH_PACKET_CORRUPT;
     }
-    moloch_print_hex_string(packet->pkt, packet->pktlen);
+//    moloch_print_hex_string(packet->pkt, packet->pktlen);
     int ip_len = ntohs(ip4->ip_len);
     //pktlen-ethlen-valnLen = iplen;
 
@@ -877,7 +877,6 @@ LOCAL MolochPacketRC moloch_packet_ip4(MolochPacketBatch_t *batch, MolochPacket_
 
     //判断哪种协议类型。走哪种协议,根据协议号可以走自定义的回调函数。
     packet->ipProtocol = ip4->ip_p;
-    LOG("ip protocol ======%hhu", ip4->ip_p);
     switch (ip4->ip_p) {
     case IPPROTO_IPV4:
         return moloch_packet_ip4(batch, packet, data + ip_hdr_len, len - ip_hdr_len);
@@ -957,7 +956,6 @@ LOCAL MolochPacketRC moloch_packet_ip4(MolochPacketBatch_t *batch, MolochPacket_
     case IPPROTO_IPV6:
         return moloch_packet_ip6(batch, packet, data + ip_hdr_len, len - ip_hdr_len);
     default:
-        LOG("------------------default----------");
         if (packet->mProtocol == nxgMProtocol) {
             return moloch_packet_run_ip_cb(batch, packet, data + ip_hdr_len, len - ip_hdr_len, MOLOCH_IPPROTO_NXG, "IP4");
         }
