@@ -183,11 +183,9 @@ void moloch_packet_flush()
 SUPPRESS_ALIGNMENT
 LOCAL void moloch_packet_process(MolochPacket_t *packet, int thread)
 {
-    LOG("======begin to deal packet in thread:%d, %d", thread, config.captureMode);
-//#ifdef DEBUG_PACKETå
+#ifdef DEBUG_PACKETå
     LOG("Processing %p %d", packet, packet->pktlen);
-//#endif
-    LOG("======before, hash:%d, pktlen:%d, pyloadOffset:%d, payloadLen:%d, vlan:%d, mprotocol:%d, ipOffset:%d, size:%d", packet->hash, packet->pktlen, packet->payloadOffset, packet->payloadLen, packet->vlan, packet->mProtocol, packet->ipOffset, sizeof(struct ip));
+#endif
 
     lastPacketSecs[thread] = packet->ts.tv_sec;
 
@@ -324,7 +322,6 @@ LOCAL void moloch_packet_process(MolochPacket_t *packet, int thread)
             //增加packet ts
             if (config.enablePacketTs) {
                 tsLen = ((uint64_t)session->firstPacket.tv_sec)*1000 + ((uint64_t)session->firstPacket.tv_usec)/1000;
-                LOG("======packetTs:%"PRIu64, tsLen);
                 g_array_append_val(session->packetTsArray, tsLen);
             }
 
@@ -422,18 +419,15 @@ LOCAL void *moloch_packet_thread(void *threadp)
 {
 
     int thread = (long)threadp;
-    LOG("====== Init packet thread======%d", thread);
     const uint32_t maxPackets75 = config.maxPackets*0.75;
     uint32_t skipCount = 0;
     // 轮训处理packet队列中的packet。
     while (1) {
         MolochPacket_t  *packet;
-        LOG("====== packet thread while 1======%d", thread);
         MOLOCH_LOCK(packetQ[thread].lock);
         inProgress[thread] = 0;
         //从队列中读取packet。
         if (DLL_COUNT(packet_, &packetQ[thread]) == 0) {
-            LOG("====== packet thread lock while 1======%d", thread);
             struct timespec ts;
             clock_gettime(CLOCK_REALTIME_COARSE, &ts);
             currentTime[thread] = ts.tv_sec;
@@ -455,7 +449,6 @@ LOCAL void *moloch_packet_thread(void *threadp)
         // Only process commands if the packetQ is less then 75% full or every 8 packets
         if (likely(DLL_COUNT(packet_, &packetQ[thread]) < maxPackets75) || (skipCount & 0x7) == 0) {
             //符合条件的进行session的处理
-            LOG("======deal session. thread:%d", thread);
             moloch_session_process_commands(thread);
             if (!packet)
                 continue;
@@ -463,7 +456,6 @@ LOCAL void *moloch_packet_thread(void *threadp)
             skipCount++;
         }
         //处理收到的packet。
-        LOG("====== deal packet, thread:%d", thread);
         moloch_packet_process(packet, thread);
     }
 
@@ -810,28 +802,27 @@ LOCAL MolochPacketRC moloch_packet_ip4(MolochPacketBatch_t *batch, MolochPacket_
     //根据配置，自定义走哪个parser
     if (config.captureMode != 0) {
         packet->mProtocol = nxgMProtocol;
-        LOG("Enter nxg parser----------------%d", config.captureMode);
     }
     struct ip           *ip4 = (struct ip*)data;
     struct tcphdr       *tcphdr = 0;
     struct udphdr       *udphdr = 0;
     uint8_t              sessionId[MOLOCH_SESSIONID_LEN];
 
-//#ifdef DEBUG_PACKET
+#ifdef DEBUG_PACKET
     LOG("enter %p %p %d", packet, data, len);
-//#endif
+#endif
 
     if (len < (int)sizeof(struct ip)) {
-//#ifdef DEBUG_PACKET
+#ifdef DEBUG_PACKET
         LOG("BAD PACKET: too small for header %p %d", packet, len);
-//#endif
+#endif
         return MOLOCH_PACKET_CORRUPT;
     }
 
     if (ip4->ip_v != 4) {
-//#ifdef DEBUG_PACKET
+#ifdef DEBUG_PACKET
         LOG("BAD PACKET: ip4->ip_v4 %d != 4", ip4->ip_v);
-//#endif
+#endif
         return MOLOCH_PACKET_CORRUPT;
     }
     moloch_print_hex_string(packet->pkt, packet->pktlen);
@@ -841,10 +832,10 @@ LOCAL MolochPacketRC moloch_packet_ip4(MolochPacketBatch_t *batch, MolochPacket_
     //去掉eth+vlan后是ip包的len， ip_len是原始包的长度，这里截断了。所以不进行处理
     //加一个配置，对于特定的配置，走特定的逻辑
     if (len < ip_len && config.captureMode==0) {
-//#ifdef DEBUG_PACKET
+#ifdef DEBUG_PACKET
         LOG("condition:%d--%d--%d", len, ip_len, config.captureMode);
         LOG("BAD PACKET: incomplete %p %d %d proto:%d, %d, %d", packet, len, ip_len, nxgMProtocol, packet->vlan, packet->payloadLen);
-//#endif
+#endif
         return MOLOCH_PACKET_CORRUPT;
     }
 
@@ -893,9 +884,9 @@ LOCAL MolochPacketRC moloch_packet_ip4(MolochPacketBatch_t *batch, MolochPacket_
         break;
     case IPPROTO_TCP:
         if (len < ip_hdr_len + (int)sizeof(struct tcphdr)) {
-//#ifdef DEBUG_PACKET
+#ifdef DEBUG_PACKET
             LOG("BAD PACKET: too small for tcp hdr %p %d", packet, len);
-//#endif
+#endif
             return MOLOCH_PACKET_CORRUPT;
         }
 
@@ -926,9 +917,9 @@ LOCAL MolochPacketRC moloch_packet_ip4(MolochPacketBatch_t *batch, MolochPacket_
         break;
     case IPPROTO_UDP:
         if (len < ip_hdr_len + (int)sizeof(struct udphdr)) {
-//#ifdef DEBUG_PACKET
+#ifdef DEBUG_PACKET
         LOG("BAD PACKET: too small for udp header %p %d", packet, len);
-//#endif
+#endif
             return MOLOCH_PACKET_CORRUPT;
         }
 
@@ -984,9 +975,9 @@ LOCAL MolochPacketRC moloch_packet_ip6(MolochPacketBatch_t * batch, MolochPacket
     struct udphdr       *udphdr = 0;
     uint8_t              sessionId[MOLOCH_SESSIONID_LEN];
 
-//#ifdef DEBUG_PACKET
+#ifdef DEBUG_PACKET
     LOG("enter ipv6 %p %p %d", packet, data, len);
-//#endif
+#endif
 
     if (len < (int)sizeof(struct ip6_hdr)) {
         return MOLOCH_PACKET_CORRUPT;
@@ -1015,24 +1006,24 @@ LOCAL MolochPacketRC moloch_packet_ip6(MolochPacketBatch_t * batch, MolochPacket
     packet->payloadOffset = packet->ipOffset + ip_hdr_len;
 
     if (ip_len + (int)sizeof(struct ip6_hdr) < ip_hdr_len) {
-//#ifdef DEBUG_PACKET
+#ifdef DEBUG_PACKET
         LOG ("ERROR - %d + %ld < %d", ip_len, (long)sizeof(struct ip6_hdr), ip_hdr_len);
-//#endif
+#endif
         return MOLOCH_PACKET_CORRUPT;
     }
     packet->payloadLen = ip_len + sizeof(struct ip6_hdr) - ip_hdr_len;
 
     if (packet->pktlen < packet->payloadOffset + packet->payloadLen) {
-//#ifdef DEBUG_PACKET
+#ifdef DEBUG_PACKET
         LOG ("ERROR - %d < %d + %d", packet->pktlen, packet->payloadOffset, packet->payloadLen);
-//#endif
+#endif
         return MOLOCH_PACKET_CORRUPT;
     }
 
 
-//#ifdef DEBUG_PACKET
+#ifdef DEBUG_PACKET
     LOG("Got ip6 header %p %d", packet, packet->pktlen);
-//#endif
+#endif
     int nxt = ip6->ip6_nxt;
     int done = 0;
     do {
@@ -1162,9 +1153,9 @@ LOCAL MolochPacketRC moloch_packet_frame_relay(MolochPacketBatch_t *batch, Moloc
 /******************************************************************************/
 LOCAL MolochPacketRC moloch_packet_ieee802(MolochPacketBatch_t *batch, MolochPacket_t * const packet, const uint8_t *data, int len)
 {
-//#ifdef DEBUG_PACKET
+#ifdef DEBUG_PACKET
     LOG("enter ieee802 %p %p %d", packet, data, len);
-//#endif
+#endif
 
     if (len < 6 || memcmp(data+2, "\xfe\xfe\x03", 3) != 0)
         return MOLOCH_PACKET_CORRUPT;
@@ -1182,9 +1173,9 @@ LOCAL MolochPacketRC moloch_packet_ether(MolochPacketBatch_t * batch, MolochPack
 {
     LOG("Enter moloch packet ether,len:%d", len);
     if (len < 14) {
-//#ifdef DEBUG_PACKET
+#ifdef DEBUG_PACKET
         LOG("BAD PACKET: Too short %d", len);
-//#endif
+#endif
         return MOLOCH_PACKET_CORRUPT;
     }
     int n = 12;
@@ -1322,10 +1313,10 @@ void moloch_packet_batch(MolochPacketBatch_t * batch, MolochPacket_t * const pac
 {
     MolochPacketRC rc;
 
-//#ifdef DEBUG_PACKET
+#ifdef DEBUG_PACKET
     LOG("moloch packet batch, enter %p %u %d", packet, pcapFileHeader.dlt, packet->pktlen);
     moloch_print_hex_string(packet->pkt, packet->pktlen);
-//#endif
+#endif
     LOG("Dlt------%d", pcapFileHeader.dlt);
     switch(pcapFileHeader.dlt) {
     case DLT_NULL: // NULL
@@ -1337,9 +1328,9 @@ void moloch_packet_batch(MolochPacketBatch_t * batch, MolochPacket_t * const pac
 
             }
         } else {
-//#ifdef DEBUG_PACKET
+#ifdef DEBUG_PACKET
             LOG("BAD PACKET: Too short %d", packet->pktlen);
-//#endif
+#endif
             rc = MOLOCH_PACKET_CORRUPT;
         }
         break;
@@ -1511,9 +1502,9 @@ void moloch_packet_save_ethernet( MolochPacket_t * const packet, uint16_t type)
 /******************************************************************************/
 int moloch_packet_run_ethernet_cb(MolochPacketBatch_t * batch, MolochPacket_t * const packet, const uint8_t *data, int len, uint16_t type, const char *str)
 {
-//#ifdef DEBUG_PACKET
+#ifdef DEBUG_PACKET
     LOG("enter ethernet %p %d %s %p %d", packet, type, str, data, len);
-//#endif
+#endif
 
     if (ethernetCbs[type]) {
         LOG("call eth:%s, len:%d", str, len);
@@ -1541,9 +1532,9 @@ void moloch_packet_set_ethernet_cb(uint16_t type, MolochPacketEnqueue_cb enqueue
 /******************************************************************************/
 int moloch_packet_run_ip_cb(MolochPacketBatch_t * batch, MolochPacket_t * const packet, const uint8_t *data, int len, uint16_t type, const char *str)
 {
-//#ifdef DEBUG_PACKET
+#ifdef DEBUG_PACKET
     LOG("enter run ip cb %p %d %s %p %d", packet, type, str, data, len);
-//#endif
+#endif
 
     if (type >= MOLOCH_IPPROTO_MAX) {
         return MOLOCH_PACKET_CORRUPT;
@@ -1890,6 +1881,5 @@ int moloch_mprotocol_register_internal(char                            *name,
     mProtocols[num].preProcess = preProcess;
     mProtocols[num].process = process;
     mProtocols[num].sFree = sFree;
-    LOG("======register internal:%s, %d, %d", name, ses, num);
     return num;
 }
