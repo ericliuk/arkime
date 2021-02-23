@@ -83,6 +83,7 @@ void moloch_session_id (uint8_t *buf, uint32_t addr1, uint16_t port1, uint32_t a
         memcpy(buf+11, &port1, 2);
     }
 }
+
 /******************************************************************************/
 void moloch_session_id6 (uint8_t *buf, uint8_t *addr1, uint16_t port1, uint8_t *addr2, uint16_t port2)
 {
@@ -242,6 +243,18 @@ LOCAL void moloch_session_free (MolochSession_t *session)
     if (config.enablePacketLen) {
         g_array_free(session->fileLenArray, TRUE);
     }
+
+    if (config.enablePacketTs) {
+        g_array_free(session->packetTsArray, TRUE);
+    }
+
+//    if (config.enablePacketMode) {
+//        g_array_free(session->packetModeArray, TRUE);
+//    }
+
+    if (config.enablePacketFlag) {
+        g_array_free(session->packetFlagArray, TRUE);
+    }
     g_array_free(session->fileNumArray, TRUE);
 
     if (session->rootId && session->rootId != (void *)1L)
@@ -327,10 +340,20 @@ void moloch_session_mid_save(MolochSession_t *session, uint32_t tv_sec)
     }
 
     moloch_rules_run_before_save(session, 0);
+    // save session.
     moloch_db_save_session(session, FALSE);
     g_array_set_size(session->filePosArray, 0);
     if (config.enablePacketLen) {
         g_array_set_size(session->fileLenArray, 0);
+    }
+    if (config.enablePacketTs) {
+        g_array_set_size(session->packetTsArray, 0);
+    }
+//    if (config.enablePacketMode) {
+//        g_array_set_size(session->packetModeArray, 0);
+//    }
+    if (config.enablePacketFlag) {
+        g_array_set_size(session->packetFlagArray, 0);
     }
     g_array_set_size(session->fileNumArray, 0);
     session->lastFileNum = 0;
@@ -457,6 +480,18 @@ MolochSession_t *moloch_session_find_or_create(int mProtocol, uint32_t hash, uin
     if (config.enablePacketLen) {
         session->fileLenArray = g_array_sized_new(FALSE, FALSE, sizeof(uint16_t), 100);
     }
+
+    if (config.enablePacketTs) {
+        session->packetTsArray = g_array_sized_new(FALSE, FALSE, sizeof(uint64_t), 100);
+    }
+
+//    if (config.enablePacketMode) {
+//        session->packetModeArray = g_array_sized_new(FALSE, FALSE, sizeof(uint16_t), 100);
+//    }
+
+    if (config.enablePacketFlag) {
+        session->packetFlagArray = g_array_sized_new(FALSE, FALSE, sizeof(uint16_t), 100);
+    }
     session->fileNumArray = g_array_new(FALSE, FALSE, 4);
     session->fields = MOLOCH_SIZE_ALLOC0(fields, sizeof(MolochField_t *)*config.maxField);
     session->maxFields = config.maxField;
@@ -506,7 +541,6 @@ void moloch_session_process_commands(int thread)
     // Closing Q
     for (count = 0; count < 10; count++) {
         MolochSession_t *session = DLL_PEEK_HEAD(q_, &closingQ[thread]);
-
         if (session && session->saveTime < (uint64_t)lastPacketSecs[thread]) {
             moloch_session_save(session);
         } else {

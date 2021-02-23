@@ -165,9 +165,9 @@ gchar *moloch_config_str(GKeyFile *keyfile, char *key, char *d)
     if (result)
         g_strstrip(result);
 
-    if (config.debug) {
-        LOG("%s=%s", key, result?result:"(null)");
-    }
+//    if (config.debug) {
+        LOG("====== %s=%s", key, result?result:"(null)");
+//    }
 
     return result;
 }
@@ -473,8 +473,22 @@ void moloch_config_load()
         g_free(config.prefix);
         config.prefix = tmp;
     }
+    //for nxg
+//    config.captureMode      = moloch_config_str(keyfile, "captureMode", "normal");
+    config.captureMode    = moloch_config_int(keyfile, "captureMode", 0, 0, 2);
+
+    //截断
+    config.captureTruncLen    = moloch_config_int(keyfile, "captureTruncLen", 64, 0, 1024);
+    config.enablePacketTs     = moloch_config_boolean(NULL, "enablePacketTs", FALSE);
+//    config.enablePacketMode     = moloch_config_boolean(NULL, "enablePacketMode", FALSE);
+    config.enablePacketFlag    = moloch_config_boolean(NULL, "enablePacketFlag", FALSE);
+
+
+
+
 
     config.elasticsearch    = moloch_config_str(keyfile, "elasticsearch", "localhost:9200");
+
     config.interface        = moloch_config_str_list(keyfile, "interface", NULL);
     config.pcapDir          = moloch_config_str_list(keyfile, "pcapDir", NULL);
     config.bpf              = moloch_config_str(keyfile, "bpf", NULL);
@@ -921,6 +935,7 @@ gboolean moloch_config_reload_files (gpointer UNUSED(user_data))
 /******************************************************************************/
 void moloch_config_init()
 {
+    LOG("======Init moloch config");
     HASH_INIT(s_, config.dontSaveTags, moloch_string_hash, moloch_string_cmp);
 
     moloch_config_load();

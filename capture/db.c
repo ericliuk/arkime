@@ -41,6 +41,7 @@ LOCAL  uint16_t         myPid;
 extern uint32_t         pluginsCbs;
 extern uint64_t         writtenBytes;
 extern uint64_t         unwrittenBytes;
+extern int                          nxgMProtocol;
 
 LOCAL struct timeval    startTime;
 LOCAL char             *rirs[256];
@@ -224,7 +225,6 @@ void moloch_db_geo_lookup6(MolochSession_t *session, struct in6_addr addr, char 
         sa = (struct sockaddr *)&sin6;
     }
 
-
     int error = 0;
     if (!*g && geoCountry) {
         MMDB_lookup_result_s result = MMDB_lookup_sockaddr(geoCountry, sa, &error);
@@ -373,6 +373,7 @@ if (HEAD.s_count > 0) { \
 
 void moloch_db_save_session(MolochSession_t *session, int final)
 {
+    LOG("====== moloch db save session, thread:%d.", session->thread);
     uint32_t               i;
     char                   id[100];
     uint32_t               id_len;
@@ -412,6 +413,18 @@ void moloch_db_save_session(MolochSession_t *session, int final)
     jsonSize = 1100 + session->filePosArray->len*17 + 10*session->fileNumArray->len;
     if (config.enablePacketLen) {
         jsonSize += 10*session->fileLenArray->len;
+    }
+
+    if (config.enablePacketTs) {
+        jsonSize += 10*session->packetTsArray->len;
+    }
+
+//    if (config.enablePacketMode) {
+//        jsonSize += 10*session->packetModeArray->len;
+//    }
+
+    if (config.enablePacketFlag) {
+        jsonSize += 10*session->packetFlagArray->len;
     }
 
     for (pos = 0; pos < session->maxFields; pos++) {
@@ -466,6 +479,7 @@ void moloch_db_save_session(MolochSession_t *session, int final)
     }
 
     if (!config.autoGenerateId || session->rootId == (void *)1L) {
+
         id_len = snprintf(id, sizeof(id), "%s-", dbInfo[thread].prefix);
 
         uuid_generate(uuid);
@@ -482,6 +496,10 @@ void moloch_db_save_session(MolochSession_t *session, int final)
 
         if (session->rootId == (void*)1L)
             session->rootId = g_strdup(id);
+//        if (session->mProtocol == nxgMProtocol) {
+//            id[0] = session->sessionId[1];
+//            LOG("session======------%d", session->sessionId[1]);
+//        }
     }
 
     struct timeval currentTime;
@@ -538,7 +556,7 @@ void moloch_db_save_session(MolochSession_t *session, int final)
         g_free(communityId);
     }
 
-    if (session->ipProtocol == IPPROTO_TCP) {
+    if (session->ipProtocol == IPPROTO_TCP && !config.enablePacketFlag) {
         BSB_EXPORT_sprintf(jbsb,
                            "\"tcpflags\":{"
                            "\"syn\": %d,"
@@ -618,29 +636,31 @@ void moloch_db_save_session(MolochSession_t *session, int final)
         if (g2)
             BSB_EXPORT_sprintf(jbsb, "\"dstGEO\":\"%2.2s\",", g2);
 
+        if (config.captureMode == 0 ) {
+            if (as1) {
+                BSB_EXPORT_cstr(jbsb, "\"srcASN\":");
+                moloch_db_js0n_str(&jbsb, (unsigned char*)as1, TRUE);
+                BSB_EXPORT_u08(jbsb, ',');
+                if (asFree1)
+                    free(as1);
+            }
 
-        if (as1) {
-            BSB_EXPORT_cstr(jbsb, "\"srcASN\":");
-            moloch_db_js0n_str(&jbsb, (unsigned char*)as1, TRUE);
-            BSB_EXPORT_u08(jbsb, ',');
-            if (asFree1)
-                free(as1);
+            if (as2) {
+                BSB_EXPORT_cstr(jbsb, "\"dstASN\":");
+                moloch_db_js0n_str(&jbsb, (unsigned char*)as2, TRUE);
+                BSB_EXPORT_u08(jbsb, ',');
+                if (asFree2)
+                    free(as2);
+            }
+
+
+            if (rir1)
+                BSB_EXPORT_sprintf(jbsb, "\"srcRIR\":\"%s\",", rir1);
+
+            if (rir2)
+                BSB_EXPORT_sprintf(jbsb, "\"dstRIR\":\"%s\",", rir2);
         }
 
-        if (as2) {
-            BSB_EXPORT_cstr(jbsb, "\"dstASN\":");
-            moloch_db_js0n_str(&jbsb, (unsigned char*)as2, TRUE);
-            BSB_EXPORT_u08(jbsb, ',');
-            if (asFree2)
-                free(as2);
-        }
-
-
-        if (rir1)
-            BSB_EXPORT_sprintf(jbsb, "\"srcRIR\":\"%s\",", rir1);
-
-        if (rir2)
-            BSB_EXPORT_sprintf(jbsb, "\"dstRIR\":\"%s\",", rir2);
     }
 
     BSB_EXPORT_sprintf(jbsb,
@@ -707,11 +727,43 @@ void moloch_db_save_session(MolochSession_t *session, int final)
     BSB_EXPORT_cstr(jbsb, "],");
 
     if (config.enablePacketLen) {
+        LOG("packetLen ==========");
+
         BSB_EXPORT_cstr(jbsb, "\"packetLen\":[");
         for(i = 0; i < session->fileLenArray->len; i++) {
             if (i != 0)
                 BSB_EXPORT_u08(jbsb, ',');
             BSB_EXPORT_sprintf(jbsb, "%u", (uint16_t)g_array_index(session->fileLenArray, uint16_t, i));
+        }
+        BSB_EXPORT_cstr(jbsb, "],");
+    }
+
+    if (config.enablePacketTs) {
+        BSB_EXPORT_cstr(jbsb, "\"packetTs\":[");
+        for(i = 0; i < session->packetTsArray->len; i++) {
+            if (i != 0)
+                BSB_EXPORT_u08(jbsb, ',');
+            BSB_EXPORT_sprintf(jbsb, "%"PRIu64, g_array_index(session->packetTsArray, uint64_t, i));
+        }
+        BSB_EXPORT_cstr(jbsb, "],");
+    }
+
+//    if (config.enablePacketMode) {
+//        BSB_EXPORT_cstr(jbsb, "\"packetMode\":[");
+//        for(i = 0; i < session->packetModeArray->len; i++) {
+//            if (i != 0)
+//                BSB_EXPORT_u08(jbsb, ',');
+//            BSB_EXPORT_sprintf(jbsb, "%u", (uint16_t)g_array_index(session->packetModeArray, uint16_t, i));
+//        }
+//        BSB_EXPORT_cstr(jbsb, "],");
+//    }
+
+    if (config.enablePacketFlag) {
+        BSB_EXPORT_cstr(jbsb, "\"packetFlag\":[");
+        for(i = 0; i < session->packetFlagArray->len; i++) {
+            if (i != 0)
+                BSB_EXPORT_u08(jbsb, ',');
+            BSB_EXPORT_sprintf(jbsb, "%u", (uint16_t)g_array_index(session->packetFlagArray, uint16_t, i));
         }
         BSB_EXPORT_cstr(jbsb, "],");
     }
@@ -752,13 +804,20 @@ void moloch_db_save_session(MolochSession_t *session, int final)
             break;
         case MOLOCH_FIELD_TYPE_STR:
             BSB_EXPORT_sprintf(jbsb, "\"%s\":", config.fields[pos]->dbField);
-            moloch_db_js0n_str(&jbsb,
+                moloch_db_js0n_str(&jbsb,
                                (unsigned char *)session->fields[pos]->str,
                                flags & MOLOCH_FIELD_FLAG_FORCE_UTF8);
-            BSB_EXPORT_u08(jbsb, ',');
-            if (freeField) {
+
+                BSB_EXPORT_u08(jbsb, ',');
+
+                if (freeField) {
+                LOG("======Deal fields:============str5:%s", session->fields[pos]->str);
+                //会段错误
                 g_free(session->fields[pos]->str);
+                LOG("======Deal fields:============str6");
+
             }
+            LOG("======Deal fields:============str comp");
             break;
         case MOLOCH_FIELD_TYPE_INT_ARRAY:
             if (flags & MOLOCH_FIELD_FLAG_CNT) {
@@ -776,6 +835,7 @@ void moloch_db_save_session(MolochSession_t *session, int final)
             }
             break;
         case MOLOCH_FIELD_TYPE_STR_ARRAY:
+
             if (flags & MOLOCH_FIELD_FLAG_CNT) {
                 BSB_EXPORT_sprintf(jbsb, "\"%sCnt\":%u,", config.fields[pos]->dbField, session->fields[pos]->sarray->len);
             }
@@ -1042,6 +1102,7 @@ void moloch_db_save_session(MolochSession_t *session, int final)
             session->fields[pos] = 0;
         }
     }
+    LOG("fields-----------");
 
     if (inGroupNum) {
         BSB_EXPORT_rewind(jbsb, 1); // Remove last comma
@@ -1058,17 +1119,20 @@ void moloch_db_save_session(MolochSession_t *session, int final)
 
     MOLOCH_THREAD_INCR_NUM(totalSessionBytes, (int)(BSB_WORK_PTR(jbsb)-dataPtr));
 
-    if (config.dryRun) {
+    if (config.dryRun)
+    {
         if (config.tests) {
             static int outputed;
 
             MOLOCH_LOCK(outputed);
             outputed++;
             const int hlen = dataPtr - startPtr;
-            fprintf(stderr, "  %s{\"header\":%.*s,\n  \"body\":%.*s}\n", (outputed==1 ? "":","), hlen-1, dbInfo[thread].json, (int)(BSB_LENGTH(jbsb)-hlen-1), dbInfo[thread].json+hlen);
+            fprintf(stderr, "  %s{\"header\":%.*s,\n  \"body\":%.*s}\n", (outputed == 1 ? "" : ","), hlen - 1,
+                    dbInfo[thread].json, (int) (BSB_LENGTH(jbsb) - hlen - 1), dbInfo[thread].json + hlen);
             fflush(stderr);
             MOLOCH_UNLOCK(outputed);
-        } else if (config.debug) {
+//        } else if (config.debug) {
+        } else {
             LOG("%.*s\n", (int)BSB_LENGTH(jbsb), dbInfo[thread].json);
         }
         BSB_INIT(jbsb, dbInfo[thread].json, BSB_SIZE(jbsb));
@@ -1076,6 +1140,7 @@ void moloch_db_save_session(MolochSession_t *session, int final)
     }
 
     if (config.noSPI) {
+
         BSB_INIT(jbsb, dbInfo[thread].json, BSB_SIZE(jbsb));
         goto cleanup;
     }
@@ -1473,6 +1538,8 @@ LOCAL gboolean moloch_db_flush_gfunc (gpointer user_data )
 
     for (thread = 0; thread < config.packetThreads; thread++) {
         MOLOCH_LOCK(dbInfo[thread].lock);
+        printf("moloch db flush thread------%s\n", dbInfo[thread].json);
+        printf("condition:%d---%d\n", dbInfo[thread].json && BSB_LENGTH(dbInfo[thread].bsb) > 0, (currentTime.tv_sec - dbInfo[thread].lastSave) >= config.dbFlushTimeout);
         if (dbInfo[thread].json && BSB_LENGTH(dbInfo[thread].bsb) > 0 &&
             ((currentTime.tv_sec - dbInfo[thread].lastSave) >= config.dbFlushTimeout || user_data == (gpointer)1)) {
 

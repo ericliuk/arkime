@@ -58,7 +58,7 @@
 
 #define MOLOCH_API_VERSION 230
 
-#define MOLOCH_SESSIONID_LEN 37
+#define MOLOCH_SESSIONID_LEN 46
 
 #define MOLOCH_V6_TO_V4(_addr) (((uint32_t *)(_addr).s6_addr)[3])
 
@@ -69,6 +69,7 @@
 #define MOLOCH_IPPROTO_UNKNOWN 255
 #define MOLOCH_IPPROTO_CORRUPT 256
 #define MOLOCH_IPPROTO_MAX     257
+#define MOLOCH_IPPROTO_NXG     250
 
 #define MOLOCH_SESSION_v6(s) ((s)->sessionId[0] == 37)
 
@@ -470,6 +471,19 @@ typedef struct moloch_config {
     char      enablePacketLen;
     char      gapPacketPos;
     char      enablePacketDedup;
+
+
+    //for nxg
+    //
+//    char     *captureMode;
+    //0 for normal, 1 for capture, 2 for drop
+    int     captureMode;
+    char      enablePacketTs;
+//    char      enablePacketMode;
+    char      enablePacketFlag;
+    //截断长度
+    int       captureTruncLen;
+
 } MolochConfig_t;
 
 typedef struct {
@@ -618,6 +632,9 @@ typedef struct moloch_session {
     GArray                *fileNumArray;
     char                  *rootId;
 
+    GArray                *packetTsArray;
+    GArray                *packetModeArray;
+    GArray                *packetFlagArray;
     struct timeval         firstPacket;
     struct timeval         lastPacket;
     struct in6_addr        addr1;
