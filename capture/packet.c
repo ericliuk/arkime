@@ -201,7 +201,7 @@ LOCAL void moloch_packet_process(MolochPacket_t *packet, int thread)
     int ip_len = ntohs(ip4->ip_len);
     int ip6_len = ntohs(ip6->ip6_plen);
     ;
-    LOG("Receive packet:  %p, pktlen:%d, ip4_len:%d, ip6_len:%d, payloadLen:%d, vlan:%d, mProto:%d", packet, pkt_len, ip_len, ip6_len, packet->payloadLen, packet->vlan, packet->mProtocol);
+//    LOG("Receive packet:  %p, pktlen:%d, ip4_len:%d, ip6_len:%d, payloadLen:%d, vlan:%d, mProto:%d", packet, pkt_len, ip_len, ip6_len, packet->payloadLen, packet->vlan, packet->mProtocol);
 //    LOG("======Customer PACKET: incomplete %p %d %d %d %d %02x %02x %02x %02x %02x",
 //        packet,
 //        pkt_len,
@@ -798,7 +798,7 @@ int atoui(const char *str)
 SUPPRESS_ALIGNMENT
 LOCAL MolochPacketRC moloch_packet_ip4(MolochPacketBatch_t *batch, MolochPacket_t * const packet, const uint8_t *data, int len)
 {
-    LOG("Enter ipv4 packet deal, with capture mode:%d", config.captureMode);
+//    LOG("Enter ipv4 packet deal, with capture mode:%d", config.captureMode);
     //根据配置，自定义走哪个parser
     if (config.captureMode != 0) {
         packet->mProtocol = nxgMProtocol;
@@ -1171,7 +1171,6 @@ LOCAL MolochPacketRC moloch_packet_ieee802(MolochPacketBatch_t *batch, MolochPac
 /******************************************************************************/
 LOCAL MolochPacketRC moloch_packet_ether(MolochPacketBatch_t * batch, MolochPacket_t * const packet, const uint8_t *data, int len)
 {
-    LOG("Enter moloch packet ether,len:%d", len);
     if (len < 14) {
 #ifdef DEBUG_PACKET
         LOG("BAD PACKET: Too short %d", len);
@@ -1316,8 +1315,8 @@ void moloch_packet_batch(MolochPacketBatch_t * batch, MolochPacket_t * const pac
 #ifdef DEBUG_PACKET
     LOG("moloch packet batch, enter %p %u %d", packet, pcapFileHeader.dlt, packet->pktlen);
     moloch_print_hex_string(packet->pkt, packet->pktlen);
-#endif
     LOG("Dlt------%d", pcapFileHeader.dlt);
+#endif
     switch(pcapFileHeader.dlt) {
     case DLT_NULL: // NULL
         if (packet->pktlen > 4) {
@@ -1335,7 +1334,6 @@ void moloch_packet_batch(MolochPacketBatch_t * batch, MolochPacket_t * const pac
         }
         break;
     case DLT_EN10MB: // Ether
-        LOG("swith dlt en10mb");
         rc = moloch_packet_ether(batch, packet, packet->pkt, packet->pktlen);
         break;
     case DLT_RAW: // RAW
@@ -1507,7 +1505,6 @@ int moloch_packet_run_ethernet_cb(MolochPacketBatch_t * batch, MolochPacket_t * 
 #endif
 
     if (ethernetCbs[type]) {
-        LOG("call eth:%s, len:%d", str, len);
         return ethernetCbs[type](batch, packet, data, len);
     }
 
