@@ -795,7 +795,6 @@ void moloch_db_save_session(MolochSession_t *session, int final)
     BSB_EXPORT_cstr(jbsb, "],");
 
     if (config.enablePacketLen) {
-        LOG("packetLen ==========");
 
         BSB_EXPORT_cstr(jbsb, "\"packetLen\":[");
         for(i = 0; i < session->fileLenArray->len; i++) {
@@ -879,13 +878,13 @@ void moloch_db_save_session(MolochSession_t *session, int final)
                 BSB_EXPORT_u08(jbsb, ',');
 
                 if (freeField) {
-                LOG("======Deal fields:============str5:%s", session->fields[pos]->str);
+//                LOG("======Deal fields:============str5:%s", session->fields[pos]->str);
                 //会段错误
                 g_free(session->fields[pos]->str);
-                LOG("======Deal fields:============str6");
+//                LOG("======Deal fields:============str6");
 
             }
-            LOG("======Deal fields:============str comp");
+//            LOG("======Deal fields:============str comp");
             break;
         case MOLOCH_FIELD_TYPE_INT_ARRAY:
             if (flags & MOLOCH_FIELD_FLAG_CNT) {
@@ -1169,7 +1168,6 @@ void moloch_db_save_session(MolochSession_t *session, int final)
             session->fields[pos] = 0;
         }
     }
-    LOG("fields-----------");
 
     if (inGroupNum) {
         BSB_EXPORT_rewind(jbsb, 1); // Remove last comma
@@ -1198,8 +1196,7 @@ void moloch_db_save_session(MolochSession_t *session, int final)
                     dbInfo[thread].json, (int) (BSB_LENGTH(jbsb) - hlen - 1), dbInfo[thread].json + hlen);
             fflush(stderr);
             MOLOCH_UNLOCK(outputed);
-//        } else if (config.debug) {
-        } else {
+        } else if (config.debug) {
             LOG("%.*s\n", (int)BSB_LENGTH(jbsb), dbInfo[thread].json);
         }
         BSB_INIT(jbsb, dbInfo[thread].json, BSB_SIZE(jbsb));
