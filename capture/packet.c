@@ -197,10 +197,10 @@ LOCAL void moloch_packet_process(MolochPacket_t *packet, int thread)
     uint8_t              sessionId[MOLOCH_SESSIONID_LEN];
 
 //    moloch_print_hex_string(packet->pkt, packet->pktlen);
-    int pkt_len = packet->pktlen;
-    int ip_len = ntohs(ip4->ip_len);
-    int ip6_len = ntohs(ip6->ip6_plen);
-    ;
+//    int pkt_len = packet->pktlen;
+//    int ip_len = ntohs(ip4->ip_len);
+//    int ip6_len = ntohs(ip6->ip6_plen);
+//    ;
 //    LOG("Receive packet:  %p, pktlen:%d, ip4_len:%d, ip6_len:%d, payloadLen:%d, vlan:%d, mProto:%d", packet, pkt_len, ip_len, ip6_len, packet->payloadLen, packet->vlan, packet->mProtocol);
 //    LOG("======Customer PACKET: incomplete %p %d %d %d %d %02x %02x %02x %02x %02x",
 //        packet,
@@ -305,10 +305,10 @@ LOCAL void moloch_packet_process(MolochPacket_t *packet, int thread)
                 int64_t pos = -1LL * packet->writerFileNum;
                 g_array_append_val(session->filePosArray, pos);
 
-                if (config.enablePacketLen) {
-                    len = 0;
-                    g_array_append_val(session->fileLenArray, len);
-                }
+//                if (config.enablePacketLen) {
+//                    len = 0;
+//                    g_array_append_val(session->fileLenArray, len);
+//                }
             }
 
             g_array_append_val(session->filePosArray, packet->writerFilePos);
@@ -779,21 +779,21 @@ void nxg_create_sessionid(uint8_t *sessionId, MolochPacket_t *packet)
 
 }
 
-int atoui(const char *str)
-{
-    int result = 0, i = 0;
-    char *tmp = NULL;
-    for (i = 0; isspace(str[i]) && i < strlen(str); i++)//跳过空白符;
-        ;
-    tmp = str+i;
-    while (*tmp)
-    {
-        result = result * 10 + *tmp - '0';
-        tmp++;
-    }
-
-    return result;
-}
+//int atoui(const char *str)
+//{
+//    int result = 0, i = 0;
+//    char *tmp = NULL;
+//    for (i = 0; isspace(str[i]) && i < strlen(str); i++)//跳过空白符;
+//        ;
+//    tmp = str+i;
+//    while (*tmp)
+//    {
+//        result = result * 10 + *tmp - '0';
+//        tmp++;
+//    }
+//
+//    return result;
+//}
 /******************************************************************************/
 SUPPRESS_ALIGNMENT
 LOCAL MolochPacketRC moloch_packet_ip4(MolochPacketBatch_t *batch, MolochPacket_t * const packet, const uint8_t *data, int len)
